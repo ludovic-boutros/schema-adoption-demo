@@ -6,20 +6,22 @@ package com.example.kafka.producer;
  * services, each maintaining its own copy of the data model, which is exactly why they can drift
  * apart without anyone noticing.
  *
- * The breaking change: a developer switched {@code amount} from a {@code String} to a proper
- * {@code Double} (e.g. to make totals easy to sum) without telling anyone downstream.
+ * Adopting Schema Registry starts with fixing the branch 02 incident: {@code amount} is reverted
+ * back to a {@code String}, its original working type. From here on, that contract is captured in
+ * a registered JSON Schema, so the next attempt to change it is checked before it ever reaches
+ * Kafka.
  */
 public class OrderEvent {
 
     private String orderId;
     private String customerId;
-    private Double amount;
+    private String amount;
     private String status;
 
     public OrderEvent() {
     }
 
-    public OrderEvent(String orderId, String customerId, Double amount, String status) {
+    public OrderEvent(String orderId, String customerId, String amount, String status) {
         this.orderId = orderId;
         this.customerId = customerId;
         this.amount = amount;
@@ -42,11 +44,11 @@ public class OrderEvent {
         this.customerId = customerId;
     }
 
-    public Double getAmount() {
+    public String getAmount() {
         return amount;
     }
 
-    public void setAmount(Double amount) {
+    public void setAmount(String amount) {
         this.amount = amount;
     }
 
@@ -61,6 +63,6 @@ public class OrderEvent {
     @Override
     public String toString() {
         return "OrderEvent{orderId='" + orderId + "', customerId='" + customerId
-                + "', amount=" + amount + " (Double), status='" + status + "'}";
+                + "', amount='" + amount + "' (String), status='" + status + "'}";
     }
 }

@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OrderEvent",
+  "type": "object",
+  "properties": {
+    "orderId": {
+      "type": "string",
+      "description": "Unique identifier of the order"
+    },
+    "customerId": {
+      "type": "string",
+      "description": "Identifier of the customer who placed the order"
+    },
+    "amount": {
+      "type": "string",
+      "description": "Order total, e.g. \"19.99\". Kept as a string, matching the working baseline from branch 01."
+    },
+    "status": {
+      "type": "string",
+      "description": "Current order status, e.g. NEW or PAID"
+    }
+  },
+  "required": ["orderId", "customerId", "amount", "status"],
+  "additionalProperties": true
+}

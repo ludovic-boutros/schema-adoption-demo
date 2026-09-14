@@ -1,7 +1,7 @@
 package com.example.kafka.producer;
 
 import com.example.kafka.common.KafkaConfig;
-import io.confluent.kafka.serializers.KafkaJsonSerializer;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -14,28 +14,35 @@ import java.util.List;
 import java.util.Properties;
 
 /**
- * Sends plain JSON {@link OrderEvent} records — no schema, no Schema Registry. Uses Confluent's
- * {@link KafkaJsonSerializer}, which serializes a POJO to JSON bytes and never talks to Schema
- * Registry.
+ * Sends {@link OrderEvent} records as plain JSON on the wire, exactly as before - but now the
+ * schema behind that JSON is registered with Schema Registry, and the schema ID travels in a
+ * Kafka record header via {@link HeaderEncodedJsonSerializer}. The consumer is completely
+ * unmodified by this change: same payload bytes, headers it doesn't look at.
  */
 public class OrderProducer {
 
     private static final Logger log = LoggerFactory.getLogger(OrderProducer.class);
+    private static final String SCHEMA_PATH = "src/main/resources/schemas/order-event.schema.json";
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         KafkaConfig config = new KafkaConfig();
         config.ensureTopicsExist(config.topic());
 
+        String subject = config.topic() + "-value";
+        SchemaRegistryClient schemaRegistryClient = SchemaRegistration.buildClient(config);
+        int schemaId = SchemaRegistration.registerSchema(schemaRegistryClient, subject, SCHEMA_PATH);
+        log.info("Registered schema for subject '{}' with id {}", subject, schemaId);
+
         Properties props = config.baseProperties();
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaJsonSerializer.class);
 
-        KafkaProducer<String, OrderEvent> producer = new KafkaProducer<>(props);
+        KafkaProducer<String, OrderEvent> producer = new KafkaProducer<>(
+                props, new StringSerializer(), new HeaderEncodedJsonSerializer<>(schemaId, subject));
         try {
             List<OrderEvent> orders = List.of(
-                    new OrderEvent("order-1", "customer-42", 19.99, "NEW"),
-                    new OrderEvent("order-2", "customer-17", 5.50, "NEW"),
-                    new OrderEvent("order-3", "customer-42", 102.00, "PAID"));
+                    new OrderEvent("order-1", "customer-42", "19.99", "NEW"),
+                    new OrderEvent("order-2", "customer-17", "5.50", "NEW"),
+                    new OrderEvent("order-3", "customer-42", "102.00", "PAID"));
 
             for (OrderEvent order : orders) {
                 send(producer, config.topic(), order);
