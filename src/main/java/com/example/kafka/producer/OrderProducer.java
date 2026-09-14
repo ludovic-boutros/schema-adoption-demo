@@ -24,7 +24,7 @@ public class OrderProducer {
 
     public static void main(String[] args) {
         KafkaConfig config = new KafkaConfig();
-        config.verifyKafkaSetup();
+        config.ensureTopicsExist(config.topic());
 
         Properties props = config.baseProperties();
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);

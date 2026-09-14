@@ -17,8 +17,12 @@ of this branch, and what breaks in the next one.
 
 ## Setup
 
-1. Create a Confluent Cloud cluster and a topic named `orders-demo` (or set
-   `TOPIC` to whatever you name it).
+1. Create a Confluent Cloud cluster and API key. Grant the service account
+   behind that key the **ResourceOwner** role on the `orders-demo` topic (or
+   whatever you set `TOPIC` to) — you don't need to create the topic
+   yourself, `KafkaConfig.ensureTopicsExist(...)` creates it automatically
+   via `AdminClient` on first run, but the service account needs permission
+   to do so.
 2. Copy `.properties.example` to `.properties` and fill in your cluster's
    bootstrap server and API key/secret.
 3. Build:

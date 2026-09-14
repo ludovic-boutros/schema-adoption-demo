@@ -32,7 +32,7 @@ public class OrderConsumer {
 
     public static void main(String[] args) {
         KafkaConfig config = new KafkaConfig();
-        config.verifyKafkaSetup();
+        config.ensureTopicsExist(config.topic());
 
         Properties props = config.baseProperties();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, config.get("GROUP_ID", "orders-demo-consumer"));

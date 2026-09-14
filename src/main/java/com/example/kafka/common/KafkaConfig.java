@@ -1,19 +1,29 @@
 package com.example.kafka.common;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /** Loads connection settings from {@code .properties} (falling back to env vars) and builds base client config. */
 public class KafkaConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(KafkaConfig.class);
 
     private final Properties settings = new Properties();
 
@@ -73,19 +83,35 @@ public class KafkaConfig {
         return props;
     }
 
-    /** Fails fast with a clear error if the cluster or topic isn't reachable. */
-    public void verifyKafkaSetup() {
+    /**
+     * Creates any of the given topics that don't already exist, so running this demo never
+     * requires a manual "create the topic first" step in the Confluent Cloud console.
+     *
+     * The service account behind API_KEY needs the ResourceOwner role on these topics (or
+     * broader) for topic creation to succeed - see the README.
+     */
+    public void ensureTopicsExist(String... topics) {
         Properties adminProps = new Properties();
         adminProps.putAll(baseProperties());
         adminProps.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 10_000);
-        try (AdminClient admin = AdminClient.create(adminProps)) {
-            Set<String> topics = admin.listTopics().names().get(10, TimeUnit.SECONDS);
-            if (!topics.contains(topic())) {
-                throw new IllegalStateException(
-                        "Topic '" + topic() + "' does not exist on this cluster. Create it before running this demo.");
-            }
+        try (Admin admin = AdminClient.create(adminProps)) {
+            ensureTopicsExist(admin, Arrays.asList(topics));
         } catch (Exception e) {
-            throw new RuntimeException("Could not verify Kafka connectivity: " + e.getMessage(), e);
+            throw new RuntimeException("Could not ensure topics exist: " + e.getMessage(), e);
         }
+    }
+
+    /** Split out from {@link #ensureTopicsExist(String...)} so it's testable against a mock {@link Admin}. */
+    static void ensureTopicsExist(Admin admin, List<String> topics) throws Exception {
+        Set<String> existing = admin.listTopics().names().get(10, TimeUnit.SECONDS);
+        List<NewTopic> missing = topics.stream()
+                .filter(t -> !existing.contains(t))
+                .map(t -> new NewTopic(t, Optional.empty(), Optional.empty()))
+                .collect(Collectors.toList());
+        if (missing.isEmpty()) {
+            return;
+        }
+        admin.createTopics(missing).all().get(30, TimeUnit.SECONDS);
+        missing.forEach(t -> log.info("Created topic '{}'", t.name()));
     }
 }

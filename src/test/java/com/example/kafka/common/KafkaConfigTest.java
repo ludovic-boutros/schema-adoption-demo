@@ -1,12 +1,19 @@
 package com.example.kafka.common;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,5 +48,18 @@ class KafkaConfigTest {
         String jaas = (String) props.get("sasl.jaas.config");
         assertTrue(jaas.contains("test-key"));
         assertTrue(jaas.contains("test-secret"));
+    }
+
+    @Test
+    void ensureTopicsExist_onlyCreatesTopicsThatAreMissing() throws Exception {
+        Admin admin = new MockAdminClient.Builder().numBrokers(1).build();
+        admin.createTopics(List.of(new NewTopic("orders-demo", Optional.empty(), Optional.empty())))
+                .all().get(10, TimeUnit.SECONDS);
+
+        KafkaConfig.ensureTopicsExist(admin, List.of("orders-demo", "some-other-topic"));
+
+        Set<String> topics = admin.listTopics().names().get(10, TimeUnit.SECONDS);
+        assertTrue(topics.contains("orders-demo"));
+        assertTrue(topics.contains("some-other-topic"));
     }
 }

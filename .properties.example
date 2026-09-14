@@ -1,3 +1,8 @@
+# The service account behind API_KEY needs the ResourceOwner role on the
+# "orders-demo" topic (Confluent Cloud RBAC) - this demo creates it
+# automatically via AdminClient if it doesn't already exist, which requires
+# Create/Describe/Alter permissions that ResourceOwner grants. You do not
+# need to create the topic by hand.
 BOOTSTRAP_SERVER=pkc-xxxxx.us-east-1.aws.confluent.cloud:9092
 API_KEY=your-api-key
 API_SECRET=your-api-secret
