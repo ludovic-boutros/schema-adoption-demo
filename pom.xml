@@ -163,7 +163,11 @@
       <plugin>
         <!-- Checks order-event.schema.json for compatibility against whatever is currently
              registered for orders-demo-value, without registering anything - run explicitly with:
-             mvn io.confluent:kafka-schema-registry-maven-plugin:test-compatibility -->
+             mvn initialize io.confluent:kafka-schema-registry-maven-plugin:test-compatibility
+             The "initialize" phase must be listed first: a direct "mvn plugin:goal" invocation
+             runs ONLY that goal, skipping every phase-bound execution (including the
+             properties-maven-plugin execution above), so SCHEMA_REGISTRY_URL/SR_API_KEY/
+             SR_API_SECRET would otherwise never get loaded from .properties. -->
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-maven-plugin</artifactId>
         <version>${confluent.version}</version>
