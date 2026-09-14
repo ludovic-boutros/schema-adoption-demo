@@ -14,18 +14,18 @@ class OrderConsumerTest {
     @Test
     void deserialize_readsMatchingJsonIntoOrderEvent() {
         KafkaJsonDeserializer<OrderEvent> deserializer = OrderConsumer.buildValueDeserializer();
-        String json = "{\"orderId\":\"order-1\",\"customerId\":\"customer-42\",\"amount\":19.99,\"status\":\"NEW\"}";
+        String json = "{\"orderId\":\"order-1\",\"customerId\":\"customer-42\",\"amount\":\"19.99\",\"status\":\"NEW\"}";
 
         OrderEvent event = deserializer.deserialize("orders-demo", json.getBytes(StandardCharsets.UTF_8));
 
         assertEquals("order-1", event.getOrderId());
-        assertEquals(19.99, event.getAmount());
+        assertEquals("19.99", event.getAmount());
     }
 
     @Test
-    void deserialize_rejectsStringAmountInsteadOfSilentlyCoercingIt() {
+    void deserialize_rejectsNumericAmountInsteadOfSilentlyCoercingIt() {
         KafkaJsonDeserializer<OrderEvent> deserializer = OrderConsumer.buildValueDeserializer();
-        String json = "{\"orderId\":\"order-1\",\"customerId\":\"customer-42\",\"amount\":\"19.99\",\"status\":\"NEW\"}";
+        String json = "{\"orderId\":\"order-1\",\"customerId\":\"customer-42\",\"amount\":19.99,\"status\":\"NEW\"}";
         byte[] data = json.getBytes(StandardCharsets.UTF_8);
 
         assertThrows(SerializationException.class, () -> deserializer.deserialize("orders-demo", data));

@@ -33,9 +33,9 @@ public class OrderProducer {
         KafkaProducer<String, OrderEvent> producer = new KafkaProducer<>(props);
         try {
             List<OrderEvent> orders = List.of(
-                    new OrderEvent("order-1", "customer-42", 19.99, "NEW"),
-                    new OrderEvent("order-2", "customer-17", 5.50, "NEW"),
-                    new OrderEvent("order-3", "customer-42", 102.00, "PAID"));
+                    new OrderEvent("order-1", "customer-42", "19.99", "NEW"),
+                    new OrderEvent("order-2", "customer-17", "5.50", "NEW"),
+                    new OrderEvent("order-3", "customer-42", "102.00", "PAID"));
 
             for (OrderEvent order : orders) {
                 send(producer, config.topic(), order);

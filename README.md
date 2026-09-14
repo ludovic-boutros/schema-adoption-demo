@@ -11,7 +11,9 @@ of `OrderEvent`:
 - `com.example.kafka.producer.OrderEvent`
 - `com.example.kafka.consumer.OrderEvent`
 
-Both currently agree: `amount` is a number (`Double`). As long as they agree,
+Both currently agree: `amount` is a `String` (e.g. `"19.99"`) — a realistic
+shape for a value that originated from a legacy source (CSV, XML, a
+spreadsheet export) nobody has touched since. As long as they agree,
 everything works — but nothing is enforcing that agreement. That's the point
 of this branch, and what breaks in the next one.
 
@@ -43,7 +45,7 @@ mvn exec:java -Dexec.mainClass=com.example.kafka.producer.OrderProducer
 ```
 
 You should see the consumer print each `OrderEvent` it receives, with
-`amount` as a plain number.
+`amount` as a plain string.
 
 Logging is configured via `src/main/resources/log4j2.xml` (Log4j2, bound
 through the SLF4J API). Kafka client and Confluent serializer internals log

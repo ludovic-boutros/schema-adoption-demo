@@ -10,7 +10,7 @@ public class OrderEvent {
 
     private String orderId;
     private String customerId;
-    private Double amount;
+    private String amount;
     private String status;
 
     public OrderEvent() {
@@ -32,11 +32,11 @@ public class OrderEvent {
         this.customerId = customerId;
     }
 
-    public Double getAmount() {
+    public String getAmount() {
         return amount;
     }
 
-    public void setAmount(Double amount) {
+    public void setAmount(String amount) {
         this.amount = amount;
     }
 
@@ -51,6 +51,6 @@ public class OrderEvent {
     @Override
     public String toString() {
         return "OrderEvent{orderId='" + orderId + "', customerId='" + customerId
-                + "', amount=" + amount + " (Double), status='" + status + "'}";
+                + "', amount='" + amount + "' (String), status='" + status + "'}";
     }
 }

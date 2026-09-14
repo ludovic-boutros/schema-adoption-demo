@@ -75,14 +75,18 @@ public class OrderConsumer {
     }
 
     /**
-     * Scalar coercion (e.g. JSON string "42.50" silently becoming a double) is disabled: Jackson's
-     * default leniency would otherwise mask type-drift bugs instead of surfacing them, which
-     * defeats the point of this demo.
+     * Scalar coercion (e.g. JSON number 19.99 silently becoming the string "19.99") is disabled:
+     * Jackson's default leniency would otherwise mask type-drift bugs instead of surfacing them,
+     * which defeats the point of this demo.
      */
     static KafkaJsonDeserializer<OrderEvent> buildValueDeserializer() {
         KafkaJsonDeserializer<OrderEvent> deserializer = new KafkaJsonDeserializer<>();
         deserializer.configure(Map.of(KafkaJsonDeserializerConfig.JSON_VALUE_TYPE, OrderEvent.class), false);
         deserializer.objectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        deserializer.objectMapper().coercionConfigFor(LogicalType.Textual)
+                .setCoercion(CoercionInputShape.Integer, CoercionAction.Fail);
+        deserializer.objectMapper().coercionConfigFor(LogicalType.Textual)
+                .setCoercion(CoercionInputShape.Float, CoercionAction.Fail);
         deserializer.objectMapper().coercionConfigFor(LogicalType.Integer)
                 .setCoercion(CoercionInputShape.String, CoercionAction.Fail);
         deserializer.objectMapper().coercionConfigFor(LogicalType.Float)
