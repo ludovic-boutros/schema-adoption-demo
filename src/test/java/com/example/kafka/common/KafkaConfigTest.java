@@ -57,11 +57,11 @@ class KafkaConfigTest {
         admin.createTopics(List.of(new NewTopic("orders-demo", Optional.empty(), Optional.empty())))
                 .all().get(10, TimeUnit.SECONDS);
 
-        KafkaConfig.ensureTopicsExist(admin, List.of("orders-demo", "some-other-topic"));
+        KafkaConfig.ensureTopicsExist(admin, List.of("orders-demo", "orders-demo-dlq"));
 
         Set<String> topics = admin.listTopics().names().get(10, TimeUnit.SECONDS);
         assertTrue(topics.contains("orders-demo"));
-        assertTrue(topics.contains("some-other-topic"));
+        assertTrue(topics.contains("orders-demo-dlq"));
     }
 
     @Test

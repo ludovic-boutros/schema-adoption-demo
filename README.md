@@ -16,26 +16,47 @@ copy, `com.example.kafka.consumer.OrderEvent`, still declares `amount` as a
 
 ## What happens
 
-Run the same steps as branch 01 (build, run the consumer, run the producer)
-against the same topic, and the consumer throws instead of printing new
-orders:
+`KafkaJsonDeserializer` fails to turn a JSON number into a `String`. Left
+alone, that would be a classic **poison pill**: `KafkaConsumer.poll()` throws
+`RecordDeserializationException` for that record, offsets are never
+committed past it (`enable.auto.commit=false`, and we only commit after a
+batch is successfully processed), so retrying — or restarting the process —
+just fetches the same broken record and throws again. Forever.
+
+This branch's consumer doesn't crash. It catches
+`RecordDeserializationException` (KIP-334 — it carries the exact
+`TopicPartition`/offset and the raw, untouched key/value bytes of the record
+that failed) around `poll()`, and:
+
+1. Publishes the raw bytes to a dead-letter topic, `orders-demo-dlq`, for
+   later inspection.
+2. Calls `consumer.seek(topicPartition, offset + 1)` to skip past the bad
+   record.
+3. Keeps polling — the rest of the topic, and any new orders, keep flowing.
 
 ```
-org.apache.kafka.common.errors.SerializationException: Error deserializing JSON message from topic orders-demo
-Caused by: com.fasterxml.jackson.databind.exc.InvalidFormatException:
-  Cannot coerce Float value (19.99) to `java.lang.String` value
+Poison pill on orders-demo-0 at offset 4: Cannot coerce Float value (19.99)
+  to `java.lang.String` value
+Published poison pill to DLQ topic 'orders-demo-dlq' at offset 0
+Skipped past offset 4 on orders-demo-0 - the consumer keeps running instead
+  of crashing.
 ```
 
 `OrderConsumerTest.deserialize_breaksOnTheProducersNewNumericAmountFormat`
-reproduces this without needing a live cluster: it serializes an order with
-the producer's current `OrderEvent`, feeds the resulting bytes to the
-consumer's deserializer, and asserts it throws.
+reproduces the underlying deserialization failure without needing a live
+cluster, and `OrderConsumerPoisonPillTest.handlePoisonPill_publishesRawBytesToDlqAndSeeksPastTheOffset`
+reproduces the recovery path — a `MockProducer` captures what's published to
+the DLQ, and a mocked `Consumer` verifies `seek()` is called with the right
+offset.
 
-This is the cost of not having a schema: an internal, well-intentioned change
-on one side silently breaks every consumer on the other, and nobody finds out
-until records start failing to deserialize in production.
+This is *not* a fix. `amount` was never delivered to anything that cares
+about it — it's quarantined in `orders-demo-dlq` waiting for a human to look
+at it and decide what to do. No schema meant nobody found out about the
+incompatible change until it happened in production, and surviving it still
+took a dead-letter topic, a custom exception handler, and manual triage.
 
-The next branches introduce Schema Registry to prevent this.
+The next branches introduce Schema Registry so this class of change is
+rejected before it ever reaches the topic — no DLQ, no triage, no lost data.
 
 ## Setup
 
