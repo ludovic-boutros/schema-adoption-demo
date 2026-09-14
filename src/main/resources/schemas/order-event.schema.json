@@ -12,8 +12,12 @@
       "description": "Identifier of the customer who placed the order"
     },
     "amount": {
+      "type": "string",
+      "description": "Order total, e.g. \"19.99\". The branch 04 retype attempt was abandoned - back to the original working type."
+    },
+    "amountNumeric": {
       "type": "number",
-      "description": "Order total. Attempted change: was 'string' (e.g. \"19.99\"), now 'number' - the same retype that broke branch 02's consumer. This is what Schema Registry rejects."
+      "description": "Order total as a number, e.g. 19.99. Optional - added alongside 'amount' without removing or retyping it, for consumers that want to do math on it."
     },
     "status": {
       "type": "string",

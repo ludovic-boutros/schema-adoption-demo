@@ -19,4 +19,16 @@ class OrderConsumerTest {
         assertEquals("order-1", event.getOrderId());
         assertEquals("19.99", event.getAmount());
     }
+
+    @Test
+    void deserialize_ignoresNewAmountNumericFieldTheConsumerDoesNotKnowAbout() {
+        KafkaJsonDeserializer<OrderEvent> deserializer = OrderConsumer.buildValueDeserializer();
+        String json = "{\"orderId\":\"order-1\",\"customerId\":\"customer-42\",\"amount\":\"19.99\","
+                + "\"amountNumeric\":19.99,\"status\":\"NEW\"}";
+
+        OrderEvent event = deserializer.deserialize("orders-demo", json.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("order-1", event.getOrderId());
+        assertEquals("19.99", event.getAmount());
+    }
 }

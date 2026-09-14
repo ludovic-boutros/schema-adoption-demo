@@ -2,7 +2,6 @@ package com.example.kafka.producer;
 
 import com.example.kafka.common.KafkaConfig;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializerConfig;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
@@ -16,15 +15,15 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 
 /**
- * Attempts to retype {@code amount} from a string back to a number - the same class of change
- * that broke branch 02's consumer. This time, Schema Registry's compatibility check rejects the
- * new schema version even though this subject is set to {@code FORWARD} (see branch 03): a
- * type change breaks reads in both directions, not just the one {@code BACKWARD} would have
- * caught. Registration fails, so this producer never sends a single message.
+ * Safely evolves the schema by adding {@code amountNumeric} alongside the existing {@code amount}
+ * string field. This registration relies on the subject already being set to {@code FORWARD}
+ * (branch 03): the schema has {@code "additionalProperties": true} (an open content model), and
+ * Schema Registry rejects an optional field added to an open-content-model schema under
+ * {@code BACKWARD} ({@code OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL}) even though nothing
+ * existing was removed or retyped. Under {@code FORWARD} it passes.
  */
 public class OrderProducer {
 
@@ -38,11 +37,8 @@ public class OrderProducer {
         String subject = config.topic() + "-value";
         SchemaRegistryClient schemaRegistryClient = SchemaRegistration.buildClient(config);
         SchemaRegistration.setCompatibility(schemaRegistryClient, subject, "FORWARD");
-
-        Optional<Integer> schemaId = registerOrReject(schemaRegistryClient, subject, SCHEMA_PATH);
-        if (schemaId.isEmpty()) {
-            return;
-        }
+        int schemaId = SchemaRegistration.registerSchema(schemaRegistryClient, subject, SCHEMA_PATH);
+        log.info("Registered schema for subject '{}' with id {}", subject, schemaId);
 
         Properties props = config.baseProperties();
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -51,9 +47,9 @@ public class OrderProducer {
                 props, new StringSerializer(), buildValueSerializer(schemaRegistryClient, config.schemaRegistryUrl()));
         try {
             List<OrderEvent> orders = List.of(
-                    new OrderEvent("order-1", "customer-42", 19.99, "NEW"),
-                    new OrderEvent("order-2", "customer-17", 5.50, "NEW"),
-                    new OrderEvent("order-3", "customer-42", 102.00, "PAID"));
+                    new OrderEvent("order-1", "customer-42", "19.99", 19.99, "NEW"),
+                    new OrderEvent("order-2", "customer-17", "5.50", 5.50, "NEW"),
+                    new OrderEvent("order-3", "customer-42", "102.00", 102.00, "PAID"));
 
             for (OrderEvent order : orders) {
                 send(producer, config.topic(), order);
@@ -61,25 +57,6 @@ public class OrderProducer {
         } finally {
             producer.flush();
             producer.close();
-        }
-    }
-
-    /**
-     * Registers the schema and returns its ID, or logs why Schema Registry rejected it and
-     * returns empty. Kept separate from {@code main()} so the rejection path is unit-testable
-     * without a live cluster.
-     */
-    static Optional<Integer> registerOrReject(SchemaRegistryClient client, String subject, String schemaPath)
-            throws Exception {
-        try {
-            int schemaId = SchemaRegistration.registerSchema(client, subject, schemaPath);
-            log.info("Registered schema for subject '{}' with id {}", subject, schemaId);
-            return Optional.of(schemaId);
-        } catch (RestClientException e) {
-            log.error("Schema Registry REJECTED this schema change for subject '{}': {}", subject, e.getMessage());
-            log.error("This is Schema Registry protecting every existing consumer from an incompatible "
-                    + "change (amount: string -> number). No message was sent.");
-            return Optional.empty();
         }
     }
 

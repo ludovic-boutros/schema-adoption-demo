@@ -1,55 +1,49 @@
-# 04 — Blocked Breaking Change
+# 05 — Safe Evolution (Forward Compatibility)
 
-A developer makes the exact same mistake as branch 02: they decide `amount`
-should be a proper numeric type again, and edit the schema and the
-producer's `OrderEvent` in place:
+Branch 04's retype attempt is abandoned - `amount` goes back to being a
+`String`. Instead, a new requirement comes in: a billing analytics service
+wants to do math on the total without parsing a string itself. The producer
+adds a new, optional field alongside the existing one:
 
 ```diff
    "amount": { "type": "string", ... },
-+  "amount": { "type": "number", ... },
++  "amountNumeric": { "type": "number", ... },
 ```
 ```diff
--  private String amount;
-+  private Double amount;
+   private String amount;
++  private Double amountNumeric;
 ```
 
-This time, though, that change is governed by Schema Registry.
+## Why this one actually needs FORWARD
+
+Branch 03 set `orders-demo-value` to `FORWARD` because the producer owns
+this data. It would be easy to assume an additive, optional field like
+`amountNumeric` passes *any* compatibility mode - nothing existing was
+removed or retyped, after all. It doesn't: `order-event.schema.json` has
+`"additionalProperties": true` (an open content model), and Schema
+Registry's JSON Schema checker rejects an optional property added to an
+open-content-model schema under `BACKWARD`
+(`OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL`), even though nothing
+existing was touched. Under `FORWARD` it passes. So this branch isn't just
+a demonstration of safe evolution - it's a demonstration of why branch 03
+picked `FORWARD` in the first place: the producer-owned schema keeps
+evolving additively, and that only works because the compatibility mode
+matches the evolution.
 
 ## What happens
 
-`OrderProducer` calls `SchemaRegistration.registerSchema(...)` at startup,
-same as branch 03 — including setting the subject to `FORWARD` first (see
-branch 03's "Why FORWARD, not BACKWARD"). This time the registry's
-compatibility check rejects the new schema version anyway: a type change
-breaks reads in *either* direction, so `FORWARD` catches it just as
-`BACKWARD` would have. Compatibility mode changes who a schema evolution is
-allowed to break for — it doesn't create a loophole for breaking changes
-in general.
-
-```
-Schema Registry REJECTED this schema change for subject 'orders-demo-value':
-Schema being registered is incompatible with an earlier schema
-This is Schema Registry protecting every existing consumer from an
-incompatible change (amount: string -> number). No message was sent.
-```
-
-`OrderProducer.main()` exits after logging this — **not one message is
-produced**. Compare that to branch 02, where the equivalent change reached
-the topic just fine and only failed downstream, inside the consumer.
-
-`OrderProducerRejectionTest` reproduces the rejection with a mocked Schema
-Registry client, no live cluster required:
-- `registerOrReject_returnsEmptyWhenSchemaRegistryRejectsTheChange`
-- `registerOrReject_returnsIdWhenSchemaRegistryAccepts`
-
-The consumer is, again, byte-for-byte unchanged from branch 03 — there was
-never anything for it to adapt to, because the bad schema never made it past
-registration.
+Registration succeeds and returns a new schema ID. The producer sends
+messages with both `amount` and `amountNumeric` populated. The consumer,
+running `OrderConsumer.buildValueDeserializer()` from branch 03 completely
+unmodified, ignores `amountNumeric` (`FAIL_ON_UNKNOWN_PROPERTIES` is `false`)
+and keeps reading `amount` exactly as before -
+`OrderConsumerTest.deserialize_ignoresNewAmountNumericFieldTheConsumerDoesNotKnowAbout`
+proves it.
 
 ## Check compatibility without running the producer
 
-The `kafka-schema-registry-maven-plugin` is now wired up in `pom.xml`, so
-you can ask Schema Registry whether `order-event.schema.json` is compatible
+The `kafka-schema-registry-maven-plugin` (wired up in branch 04's `pom.xml`)
+lets you ask Schema Registry whether `order-event.schema.json` is compatible
 without writing any Java or sending any message:
 
 ```
@@ -57,13 +51,14 @@ mvn initialize io.confluent:kafka-schema-registry-maven-plugin:set-compatibility
 mvn initialize io.confluent:kafka-schema-registry-maven-plugin:test-compatibility
 ```
 
-The first command sets `orders-demo-value` to `FORWARD` - the same mode
-`OrderProducer` sets at startup (see branch 03) - so a standalone check
-here matches what the producer would actually see. The second calls the
-same subject, but only runs Schema Registry's compatibility check
-(`testCompatibility`); nothing is registered either way. It fails the same
-way `OrderProducer` fails at runtime, just without needing a JVM full of
-Kafka client code to find out.
+Unlike branch 04, this succeeds: the same additive, optional
+`amountNumeric` field that `OrderProducer` registers successfully at
+runtime also passes Schema Registry's compatibility check on its own,
+before you write a single message. The first command sets
+`orders-demo-value` to `FORWARD` (redundant here since branch 03 already
+set it, but this keeps the standalone check reproducible even against a
+freshly reset subject); the second only runs `testCompatibility` - nothing
+is registered either way.
 
 It authenticates using `SCHEMA_REGISTRY_URL`, `SR_API_KEY`, and
 `SR_API_SECRET` from your local `.properties` file - a `properties-maven-plugin`
@@ -81,41 +76,52 @@ of an authentication or compatibility error. Prefixing the command with
 `.properties` into Maven properties), then the goal, in the same Maven
 invocation.
 
+Try skipping `set-compatibility` against a freshly reset subject (or run
+`ResetDemoEnvironment` first) and re-running `test-compatibility` - it
+fails with `OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL` against
+Confluent Cloud's `BACKWARD` default, reproducing exactly the wrinkle
+described above.
+
 ## Setup & Run
 
-Same `.properties` and permissions as branch 03 (ResourceOwner on
+Same `.properties` and permissions as branches 03/04 (ResourceOwner on
 `orders-demo` and `orders-demo-dlq`, plus Schema Registry access — topics are
 still created automatically via `AdminClient` if missing).
 
 ```
 mvn package
+mvn exec:java -Dexec.mainClass=com.example.kafka.consumer.OrderConsumer
 mvn exec:java -Dexec.mainClass=com.example.kafka.producer.OrderProducer
 ```
 
-You should see the rejection logged and the process exit without sending
-anything. The consumer (if left running from a previous branch) sees
-nothing new and keeps working, undisturbed.
+You should see the producer log the new schema ID and the `FORWARD`
+compatibility update, and the consumer keep printing orders using only the
+fields it has always known about.
 
-## The full story so far
+## The full story
 
 | Branch | No schema | With Schema Registry |
 |---|---|---|
 | Working baseline | 01 | 03 |
 | Producer changes a field's type | **02: bad data quarantined to a DLQ, requires a custom exception handler and manual triage to even survive** | **04: rejected before it ever reaches Kafka — no DLQ, no triage** |
+| Adding a new field | (no protection either way) | **05: accepted under FORWARD compatibility, consumer unaffected** |
 
-Schema Registry didn't just catch this once — it makes catching it the
-default outcome for *every* future attempt at the same mistake, instead of
-leaving that distinction to be discovered — and cleaned up after the fact,
-with a dead-letter topic and a human — by a consumer in production (02).
-
-The next branch shows the other side of evolution: adding a new field is
-*safe* under `FORWARD` — though, as it turns out, not for a reason quite as
-simple as "additive changes always pass."
+Schema Registry didn't make evolution impossible - it made the *safe* kind
+of evolution (05) possible and the *unsafe* kind (04) impossible, once you
+pick the compatibility mode that actually fits how the schema is owned and
+shaped. `FORWARD` was the right call here: the producer owns this data
+(branch 03), and this schema's open content model means an additive field
+needs `FORWARD` specifically to pass - not "any mode," and not
+automatically. Either way, the distinction is caught at registration time,
+instead of being discovered - and cleaned up after the fact, with a
+dead-letter topic and a human - by a consumer in production (02).
 
 ## Reset
 
-Same as branch 03 — this branch never actually registers a new schema
-version (Schema Registry rejects it), so there's nothing extra to clean up:
 ```
 mvn exec:java -Dexec.mainClass=com.example.kafka.common.ResetDemoEnvironment
 ```
+Deletes the `orders-demo-value` subject (soft delete followed by a
+permanent one, so a fresh registration after reset isn't rejected as
+"incompatible" with a schema that's supposedly gone) and recreates
+`orders-demo` and `orders-demo-dlq` empty.

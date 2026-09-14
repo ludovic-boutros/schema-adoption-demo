@@ -6,24 +6,27 @@ package com.example.kafka.producer;
  * services, each maintaining its own copy of the data model, which is exactly why they can drift
  * apart without anyone noticing.
  *
- * Attempted breaking change: a developer switches {@code amount} from a {@code String} to a proper
- * {@code Double} again - the exact same mistake as branch 02. This time Schema Registry's
- * compatibility check catches it before this code can send a single message.
+ * The branch 04 retype attempt is abandoned - {@code amount} goes back to being a {@code String}.
+ * Instead, a new, optional numeric field is added alongside it: {@code amountNumeric}, for
+ * services (e.g. billing analytics) that want to do math on the total without parsing a string
+ * themselves. Nothing existing was removed or retyped, so this is a safe evolution.
  */
 public class OrderEvent {
 
     private String orderId;
     private String customerId;
-    private Double amount;
+    private String amount;
+    private Double amountNumeric;
     private String status;
 
     public OrderEvent() {
     }
 
-    public OrderEvent(String orderId, String customerId, Double amount, String status) {
+    public OrderEvent(String orderId, String customerId, String amount, Double amountNumeric, String status) {
         this.orderId = orderId;
         this.customerId = customerId;
         this.amount = amount;
+        this.amountNumeric = amountNumeric;
         this.status = status;
     }
 
@@ -43,12 +46,20 @@ public class OrderEvent {
         this.customerId = customerId;
     }
 
-    public Double getAmount() {
+    public String getAmount() {
         return amount;
     }
 
-    public void setAmount(Double amount) {
+    public void setAmount(String amount) {
         this.amount = amount;
+    }
+
+    public Double getAmountNumeric() {
+        return amountNumeric;
+    }
+
+    public void setAmountNumeric(Double amountNumeric) {
+        this.amountNumeric = amountNumeric;
     }
 
     public String getStatus() {
@@ -62,6 +73,7 @@ public class OrderEvent {
     @Override
     public String toString() {
         return "OrderEvent{orderId='" + orderId + "', customerId='" + customerId
-                + "', amount=" + amount + " (Double), status='" + status + "'}";
+                + "', amount='" + amount + "' (String), amountNumeric=" + amountNumeric
+                + ", status='" + status + "'}";
     }
 }
