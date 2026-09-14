@@ -1,0 +1,6 @@
+BOOTSTRAP_SERVER=pkc-xxxxx.us-east-1.aws.confluent.cloud:9092
+API_KEY=your-api-key
+API_SECRET=your-api-secret
+TOPIC=orders-demo
+CLIENT_ID=orders-demo-client
+GROUP_ID=orders-demo-consumer
