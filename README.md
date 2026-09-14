@@ -10,11 +10,11 @@ to see what happens.
 
 | # | Branch | What it demonstrates |
 |---|--------|----------------------|
-| 1 | [`01-no-schema-working`](../../tree/01-no-schema-working) | Plain JSON producer & consumer (no schema). Everything works. |
-| 2 | [`02-no-schema-breaking-change`](../../tree/02-no-schema-breaking-change) | The producer changes a field's type. The consumer (unchanged) can't deserialize it — a poison pill quarantined to a dead-letter topic instead of crashing the consumer outright. |
-| 3 | [`03-json-schema-registry`](../../tree/03-json-schema-registry) | The producer adopts a JSON Schema in Schema Registry, with the schema ID in a Kafka header. The consumer is untouched and keeps working. |
-| 4 | [`04-json-schema-safe-evolution`](../../tree/04-json-schema-safe-evolution) | The producer safely evolves the schema by adding a new field. Schema Registry allows it; the consumer is still untouched and keeps working. |
-| 5 | [`05-json-schema-blocked-breaking-change`](../../tree/05-json-schema-blocked-breaking-change) | The producer attempts the same kind of breaking change as step 2. Schema Registry rejects it before any bad data reaches the topic. |
+| 1 | [`01-no-schema-working`](../../tree/01-no-schema-working) | Plain JSON producer & consumer (no schema). `amount` is a `String`. Everything works. |
+| 2 | [`02-no-schema-breaking-change`](../../tree/02-no-schema-breaking-change) | The producer retypes `amount` from `String` to `Double`. The consumer (unchanged) can't deserialize it — a poison pill quarantined to a dead-letter topic instead of crashing the consumer outright. |
+| 3 | [`03-json-schema-registry`](../../tree/03-json-schema-registry) | The incident is fixed (`amount` back to `String`) and the producer adopts a JSON Schema in Schema Registry, with the schema ID in a Kafka header. The consumer is untouched and keeps working. |
+| 4 | [`04-json-schema-blocked-breaking-change`](../../tree/04-json-schema-blocked-breaking-change) | The producer attempts the exact same `String`→`Double` retype as step 2. This time Schema Registry rejects the schema before any bad data reaches the topic. |
+| 5 | [`05-json-schema-safe-evolution`](../../tree/05-json-schema-safe-evolution) | The producer safely evolves the schema by adding a new optional numeric field alongside `amount`, under an explicitly-set `FORWARD` compatibility mode. Schema Registry allows it; the consumer is still untouched and keeps working. |
 
 ## Prerequisites
 
