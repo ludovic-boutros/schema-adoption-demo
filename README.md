@@ -19,15 +19,18 @@ of this branch, and what breaks in the next one.
 
 ## Setup
 
-1. Create a Confluent Cloud cluster and API key. Grant the service account
+1. **JDK 21** — `pom.xml` targets `maven.compiler.release=21`. Point
+   `JAVA_HOME` at a JDK 21 install on the command line (the same one your
+   IDE's project SDK uses) so `mvn` and your IDE compile and run identically.
+2. Create a Confluent Cloud cluster and API key. Grant the service account
    behind that key the **ResourceOwner** role on the `orders-demo` topic (or
    whatever you set `TOPIC` to) — you don't need to create the topic
    yourself, `KafkaConfig.ensureTopicsExist(...)` creates it automatically
    via `AdminClient` on first run, but the service account needs permission
    to do so.
-2. Copy `.properties.example` to `.properties` and fill in your cluster's
+3. Copy `.properties.example` to `.properties` and fill in your cluster's
    bootstrap server and API key/secret.
-3. Build:
+4. Build:
    ```
    mvn package
    ```
