@@ -34,6 +34,14 @@ Every branch reads connection details from a local `.properties` file
 (gitignored — never committed). Copy `.properties.example` to `.properties`
 and fill in your own values before running anything.
 
+Each branch also has `com.example.kafka.common.ResetDemoEnvironment`, an
+explicit tool (never run automatically) that deletes and recreates that
+branch's topics — and, from branch 03 onward, the Schema Registry subject —
+so you can start a demo run from a clean slate:
+```
+mvn exec:java -Dexec.mainClass=com.example.kafka.common.ResetDemoEnvironment
+```
+
 ## The scenario
 
 An `OrderEvent` (`orderId`, `customerId`, `amount`, `status`) is produced to
