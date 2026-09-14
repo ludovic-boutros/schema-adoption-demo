@@ -24,10 +24,11 @@ to see what happens.
 - A Confluent Cloud API key (cluster) and, from branch 03 onward, a Schema
   Registry API key
 - The service account behind those API keys needs the **ResourceOwner**
-  role on the `orders-demo` and `orders-demo-dlq` topics. Every branch
-  creates both topics automatically via `AdminClient` if they don't already
-  exist (`KafkaConfig.ensureTopicsExist`) — you never need to create a topic
-  by hand, but the service account does need permission to create them.
+  role on the `orders-demo` topic (from branch 01) and, from branch 02
+  onward, the `orders-demo-dlq` topic too. Every branch creates the topics
+  it needs automatically via `AdminClient` (`KafkaConfig.ensureTopicsExist`)
+  — you never need to create a topic by hand, but the service account does
+  need permission to create them.
 
 Every branch reads connection details from a local `.properties` file
 (gitignored — never committed). Copy `.properties.example` to `.properties`
