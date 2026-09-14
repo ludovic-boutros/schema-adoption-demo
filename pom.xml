@@ -161,8 +161,10 @@
         </executions>
       </plugin>
       <plugin>
-        <!-- Checks order-event.schema.json for compatibility against whatever is currently
-             registered for orders-demo-value, without registering anything - run explicitly with:
+        <!-- Sets orders-demo-value's compatibility level and checks order-event.schema.json
+             against whatever is currently registered, without registering anything - run
+             explicitly with:
+             mvn initialize io.confluent:kafka-schema-registry-maven-plugin:set-compatibility
              mvn initialize io.confluent:kafka-schema-registry-maven-plugin:test-compatibility
              The "initialize" phase must be listed first: a direct "mvn plugin:goal" invocation
              runs ONLY that goal, skipping every phase-bound execution (including the
@@ -182,6 +184,9 @@
           <schemaTypes>
             <orders-demo-value>JSON</orders-demo-value>
           </schemaTypes>
+          <compatibilityLevels>
+            <orders-demo-value>FORWARD</orders-demo-value>
+          </compatibilityLevels>
         </configuration>
       </plugin>
     </plugins>
