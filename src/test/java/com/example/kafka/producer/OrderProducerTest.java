@@ -18,7 +18,7 @@ class OrderProducerTest {
         valueSerializer.configure(Map.of(), false);
         MockProducer<String, OrderEvent> producer =
                 new MockProducer<String, OrderEvent>(true, null, new StringSerializer(), valueSerializer);
-        OrderEvent order = new OrderEvent("order-1", "customer-42", "19.99", "NEW");
+        OrderEvent order = new OrderEvent("order-1", "customer-42", 19.99, "NEW");
 
         OrderProducer.send(producer, "orders-demo", order);
 

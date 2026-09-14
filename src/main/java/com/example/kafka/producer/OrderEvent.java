@@ -6,20 +6,20 @@ package com.example.kafka.producer;
  * services, each maintaining its own copy of the data model, which is exactly why they can drift
  * apart without anyone noticing.
  *
- * {@code amount} arrives as a {@code String} here - a common shape for a value that originated
- * from a legacy source (CSV, XML, a spreadsheet export) that hasn't been touched since.
+ * The breaking change: a developer switched {@code amount} from a {@code String} to a proper
+ * {@code Double} (e.g. to make totals easy to sum) without telling anyone downstream.
  */
 public class OrderEvent {
 
     private String orderId;
     private String customerId;
-    private String amount;
+    private Double amount;
     private String status;
 
     public OrderEvent() {
     }
 
-    public OrderEvent(String orderId, String customerId, String amount, String status) {
+    public OrderEvent(String orderId, String customerId, Double amount, String status) {
         this.orderId = orderId;
         this.customerId = customerId;
         this.amount = amount;
@@ -42,11 +42,11 @@ public class OrderEvent {
         this.customerId = customerId;
     }
 
-    public String getAmount() {
+    public Double getAmount() {
         return amount;
     }
 
-    public void setAmount(String amount) {
+    public void setAmount(Double amount) {
         this.amount = amount;
     }
 
@@ -61,6 +61,6 @@ public class OrderEvent {
     @Override
     public String toString() {
         return "OrderEvent{orderId='" + orderId + "', customerId='" + customerId
-                + "', amount='" + amount + "' (String), status='" + status + "'}";
+                + "', amount=" + amount + " (Double), status='" + status + "'}";
     }
 }

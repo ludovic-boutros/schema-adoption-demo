@@ -1,39 +1,56 @@
-# 01 — No Schema, Working
+# 02 — No Schema, Breaking Change
 
-The baseline: a producer and a consumer exchange `OrderEvent` records as plain
-JSON. Neither one uses a schema or talks to Schema Registry — they use
-Confluent's `KafkaJsonSerializer` / `KafkaJsonDeserializer`, which just
-serialize a POJO to/from JSON bytes.
+A developer working on the producer decides `amount` should be a proper
+numeric type (`Double`) instead of the string it's always been — easier to
+sum, compare, and do math on. Nothing stops them — there's no schema, so
+nothing checks whether the consumer can still read the new shape.
 
-Producer and consumer are independent services, each with its **own copy**
-of `OrderEvent`:
+```diff
+- private String amount;
++ private Double amount;
+```
 
-- `com.example.kafka.producer.OrderEvent`
-- `com.example.kafka.consumer.OrderEvent`
+Only `com.example.kafka.producer.OrderEvent` changed. The consumer's own
+copy, `com.example.kafka.consumer.OrderEvent`, still declares `amount` as a
+`String` — untouched, unaware anything changed.
 
-Both currently agree: `amount` is a `String` (e.g. `"19.99"`) — a realistic
-shape for a value that originated from a legacy source (CSV, XML, a
-spreadsheet export) nobody has touched since. As long as they agree,
-everything works — but nothing is enforcing that agreement. That's the point
-of this branch, and what breaks in the next one.
+## What happens
+
+Run the same steps as branch 01 (build, run the consumer, run the producer)
+against the same topic, and the consumer throws instead of printing new
+orders:
+
+```
+org.apache.kafka.common.errors.SerializationException: Error deserializing JSON message from topic orders-demo
+Caused by: com.fasterxml.jackson.databind.exc.InvalidFormatException:
+  Cannot coerce Float value (19.99) to `java.lang.String` value
+```
+
+`OrderConsumerTest.deserialize_breaksOnTheProducersNewNumericAmountFormat`
+reproduces this without needing a live cluster: it serializes an order with
+the producer's current `OrderEvent`, feeds the resulting bytes to the
+consumer's deserializer, and asserts it throws.
+
+This is the cost of not having a schema: an internal, well-intentioned change
+on one side silently breaks every consumer on the other, and nobody finds out
+until records start failing to deserialize in production.
+
+The next branches introduce Schema Registry to prevent this.
 
 ## Setup
 
-1. **JDK 21** — `pom.xml` targets `maven.compiler.release=21`. Point
-   `JAVA_HOME` at a JDK 21 install on the command line (the same one your
-   IDE's project SDK uses) so `mvn` and your IDE compile and run identically.
-2. Create a Confluent Cloud cluster and API key. Grant the service account
-   behind that key the **ResourceOwner** role on the `orders-demo` topic (or
-   whatever you set `TOPIC` to) — you don't need to create the topic
-   yourself, `KafkaConfig.ensureTopicsExist(...)` creates it automatically
-   via `AdminClient` on first run, but the service account needs permission
-   to do so.
-3. Copy `.properties.example` to `.properties` and fill in your cluster's
-   bootstrap server and API key/secret.
-4. Build:
-   ```
-   mvn package
-   ```
+**JDK 21** — `pom.xml` targets `maven.compiler.release=21`. Point
+`JAVA_HOME` at a JDK 21 install on the command line (the same one your
+IDE's project SDK uses) so `mvn` and your IDE compile and run identically.
+
+Same cluster and `.properties` as branch 01, plus one addition: grant the
+service account behind your API key the **ResourceOwner** role on
+`orders-demo-dlq` too (in addition to `orders-demo`), since this branch
+introduces that topic and creates it automatically the same way.
+
+```
+mvn package
+```
 
 ## Run
 
@@ -47,23 +64,13 @@ Producer (in another terminal):
 mvn exec:java -Dexec.mainClass=com.example.kafka.producer.OrderProducer
 ```
 
-You should see the consumer print each `OrderEvent` it receives, with
-`amount` as a plain string.
-
-Logging is configured via `src/main/resources/log4j2.xml` (Log4j2, bound
-through the SLF4J API). Kafka client and Confluent serializer internals log
-at `INFO`, same as the demo's own classes; bump either `org.apache.kafka`,
-`io.confluent`, or `com.example.kafka` to `DEBUG` there if you want more
-detail.
+Watch the consumer's terminal: the poison pill is logged and shipped to
+`orders-demo-dlq`, and the consumer keeps running.
 
 ## Reset
 
-To start this branch's demo from a clean slate (no leftover messages or
-offsets from a previous run):
 ```
 mvn exec:java -Dexec.mainClass=com.example.kafka.common.ResetDemoEnvironment
 ```
-This deletes the `orders-demo` topic if it exists and recreates it empty.
-It's never run automatically by the producer or consumer — only run it
-between demo runs, not while one is in progress, since it destroys whatever
-is currently in the topic.
+Now also deletes and recreates `orders-demo-dlq` alongside `orders-demo`,
+clearing out any poison pills quarantined by a previous run.
