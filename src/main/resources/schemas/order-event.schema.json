@@ -12,8 +12,8 @@
       "description": "Identifier of the customer who placed the order"
     },
     "amount": {
-      "type": "string",
-      "description": "Order total, e.g. \"19.99\". Kept as a string, matching the working baseline from branch 01."
+      "type": "number",
+      "description": "Order total. Attempted change: was 'string' (e.g. \"19.99\"), now 'number' - the same retype that broke branch 02's consumer. This is what Schema Registry rejects."
     },
     "status": {
       "type": "string",

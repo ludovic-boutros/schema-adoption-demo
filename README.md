@@ -1,119 +1,121 @@
-# 03 — Add JSON Schema Registry (Producer Side Only)
+# 04 — Blocked Breaking Change
 
-Branch 02 ended with an incident: the producer silently retyped `amount`
-from `String` to `Double` and broke the consumer. This branch does two
-things:
+A developer makes the exact same mistake as branch 02: they decide `amount`
+should be a proper numeric type again, and edit the schema and the
+producer's `OrderEvent` in place:
 
-1. **Fixes the incident** — `amount` goes back to being a `String`, its
-   original working type.
-2. **Adopts Schema Registry** so the next time someone tries a change like
-   that, it's caught before a single message reaches Kafka, instead of
-   being discovered downstream in production.
-
-It touches only the producer: `pom.xml`, `SchemaRegistration.java`,
-`order-event.schema.json`, and `OrderProducer.java`. The consumer is
-untouched — check for yourself:
+```diff
+   "amount": { "type": "string", ... },
++  "amount": { "type": "number", ... },
 ```
-git show --stat HEAD -- src/main/java/com/example/kafka/consumer
+```diff
+-  private String amount;
++  private Double amount;
 ```
 
-## What changed on the producer
+This time, though, that change is governed by Schema Registry.
 
-- `src/main/resources/schemas/order-event.schema.json` — a JSON Schema
-  describing the current `OrderEvent` shape (`amount` as a string, matching
-  the working baseline).
-- `SchemaRegistration` registers that schema against Schema Registry
-  **explicitly, at startup** (`SchemaRegistration.registerSchema(...)`) —
-  never via serializer auto-registration. This is what CI/CD would do in a
-  real system.
-- `OrderProducer.buildValueSerializer(...)` configures Confluent's real
-  `KafkaJsonSchemaSerializer` with
-  `value.schema.id.serializer=io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer`
-  — Confluent's documented ["schema GUID in header"](https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#wire-format-schema-guid-in-header)
-  wire format. Instead of the default magic-byte-plus-ID prefix on the
-  payload, the schema's GUID is written to the `__value_schema_id` record
-  header. **The JSON payload bytes are unchanged** — confirmed by reading a
-  live message's raw bytes: the payload is still exactly
-  `{"orderId":...,"customerId":...,"amount":...,"status":...}`, and the
-  header carries a single magic byte (`0x01`) followed by the 16-byte schema
-  GUID. `auto.register.schemas=false` + `use.latest.version=true` keep
-  registration an explicit, separate step (above) rather than something the
-  serializer does implicitly; `latest.compatibility.strict=false` skips a
-  sanity check that would otherwise compare the registered schema against
-  one reflected from `OrderEvent`'s fields — irrelevant here since the
-  registered schema file is the source of truth, not the POJO shape.
+## What happens
 
-## Why FORWARD, not BACKWARD
+`OrderProducer` calls `SchemaRegistration.registerSchema(...)` at startup,
+same as branch 03 — including setting the subject to `FORWARD` first (see
+branch 03's "Why FORWARD, not BACKWARD"). This time the registry's
+compatibility check rejects the new schema version anyway: a type change
+breaks reads in *either* direction, so `FORWARD` catches it just as
+`BACKWARD` would have. Compatibility mode changes who a schema evolution is
+allowed to break for — it doesn't create a loophole for breaking changes
+in general.
 
-Confluent Cloud defaults a new subject's compatibility to `BACKWARD` (a new
-schema must be able to read data written with the old one) — the right
-default for a team that owns the *reader* contract and wants to protect
-itself while it upgrades. Here, the producer owns the data: it's the one
-evolving the schema, and it's the existing consumers - built against
-whatever schema version came before - that need to keep working against
-what the producer sends next. That's `FORWARD` compatibility (old schema
-must be able to read data written with the new one), so `OrderProducer`
-calls `SchemaRegistration.setCompatibility(client, subject, "FORWARD")`
-before registering anything.
-
-This choice carries through every later branch: branch 04 shows a breaking
-change getting rejected under `FORWARD` too (a type change breaks reads in
-both directions), and branch 05 shows why safe, additive evolution actually
-depends on being in `FORWARD` mode for this particular schema.
-
-## Why the consumer doesn't need to change
-
-The consumer's deserializer (`KafkaJsonDeserializer`) reads plain JSON bytes
-and has no idea the `__value_schema_id` header exists. Since the payload
-format is byte-for-byte the same as branch 01's working baseline, the exact
-same consumer binary from branch 02 (with its poison-pill/DLQ handling
-intact) keeps working without modification, recompilation, or redeployment.
-
-## Setup
-
-1. **JDK 21** — `pom.xml` targets `maven.compiler.release=21`. Point
-   `JAVA_HOME` at a JDK 21 install on the command line (the same one your
-   IDE's project SDK uses) so `mvn` and your IDE compile and run identically.
-2. Make sure your Confluent Cloud environment has Schema Registry
-   provisioned (one Schema Registry per environment).
-3. Grant the service account behind your API key the **ResourceOwner** role
-   on the `orders-demo` and `orders-demo-dlq` topics (same as branches
-   01/02), plus permission to manage schemas for the `orders-demo-value`
-   subject (Schema Registry RBAC is separate from cluster RBAC). Topics are
-   still created automatically via `AdminClient` if missing.
-4. Copy `.properties.example` to `.properties`, filling in
-   `SCHEMA_REGISTRY_URL`, `SR_API_KEY`, and `SR_API_SECRET` in addition to the
-   cluster settings from before.
-5. Build: `mvn package`
-
-## Run
-
-Consumer (unchanged from branch 02):
 ```
-mvn exec:java -Dexec.mainClass=com.example.kafka.consumer.OrderConsumer
+Schema Registry REJECTED this schema change for subject 'orders-demo-value':
+Schema being registered is incompatible with an earlier schema
+This is Schema Registry protecting every existing consumer from an
+incompatible change (amount: string -> number). No message was sent.
 ```
 
-Producer (now schema-aware, and back to sending `amount` as a string):
+`OrderProducer.main()` exits after logging this — **not one message is
+produced**. Compare that to branch 02, where the equivalent change reached
+the topic just fine and only failed downstream, inside the consumer.
+
+`OrderProducerRejectionTest` reproduces the rejection with a mocked Schema
+Registry client, no live cluster required:
+- `registerOrReject_returnsEmptyWhenSchemaRegistryRejectsTheChange`
+- `registerOrReject_returnsIdWhenSchemaRegistryAccepts`
+
+The consumer is, again, byte-for-byte unchanged from branch 03 — there was
+never anything for it to adapt to, because the bad schema never made it past
+registration.
+
+## Check compatibility without running the producer
+
+The `kafka-schema-registry-maven-plugin` is now wired up in `pom.xml`, so
+you can ask Schema Registry whether `order-event.schema.json` is compatible
+without writing any Java or sending any message:
+
 ```
+mvn initialize io.confluent:kafka-schema-registry-maven-plugin:set-compatibility
+mvn initialize io.confluent:kafka-schema-registry-maven-plugin:test-compatibility
+```
+
+The first command sets `orders-demo-value` to `FORWARD` - the same mode
+`OrderProducer` sets at startup (see branch 03) - so a standalone check
+here matches what the producer would actually see. The second calls the
+same subject, but only runs Schema Registry's compatibility check
+(`testCompatibility`); nothing is registered either way. It fails the same
+way `OrderProducer` fails at runtime, just without needing a JVM full of
+Kafka client code to find out.
+
+It authenticates using `SCHEMA_REGISTRY_URL`, `SR_API_KEY`, and
+`SR_API_SECRET` from your local `.properties` file - a `properties-maven-plugin`
+execution loads that file into Maven properties (`initialize` phase, silently
+skipped if `.properties` doesn't exist yet), so none of those values are ever
+written into `pom.xml`.
+
+**The `initialize` phase must be listed first.** A direct `mvn plugin:goal`
+invocation runs *only* that one goal - it skips every phase-bound execution,
+including the `properties-maven-plugin` execution above, so
+`SCHEMA_REGISTRY_URL` and friends would silently stay unresolved and the
+plugin would fail with a `NullPointerException` (`baseUrl` is null) instead
+of an authentication or compatibility error. Prefixing the command with
+`initialize` runs the lifecycle up through that phase first (loading
+`.properties` into Maven properties), then the goal, in the same Maven
+invocation.
+
+## Setup & Run
+
+Same `.properties` and permissions as branch 03 (ResourceOwner on
+`orders-demo` and `orders-demo-dlq`, plus Schema Registry access — topics are
+still created automatically via `AdminClient` if missing).
+
+```
+mvn package
 mvn exec:java -Dexec.mainClass=com.example.kafka.producer.OrderProducer
 ```
 
-You should see the producer log the schema ID it registered, and the
-consumer print orders exactly as it did in branch 01 — no code changes, no
-restart required beyond picking up new messages.
+You should see the rejection logged and the process exit without sending
+anything. The consumer (if left running from a previous branch) sees
+nothing new and keeps working, undisturbed.
 
-The next branch shows Schema Registry **blocking** the same class of
-breaking change that hurt branch 02. The one after that shows a *safe*
-evolution (adding a new field) sailing through.
+## The full story so far
+
+| Branch | No schema | With Schema Registry |
+|---|---|---|
+| Working baseline | 01 | 03 |
+| Producer changes a field's type | **02: bad data quarantined to a DLQ, requires a custom exception handler and manual triage to even survive** | **04: rejected before it ever reaches Kafka — no DLQ, no triage** |
+
+Schema Registry didn't just catch this once — it makes catching it the
+default outcome for *every* future attempt at the same mistake, instead of
+leaving that distinction to be discovered — and cleaned up after the fact,
+with a dead-letter topic and a human — by a consumer in production (02).
+
+The next branch shows the other side of evolution: adding a new field is
+*safe* under `FORWARD` — though, as it turns out, not for a reason quite as
+simple as "additive changes always pass."
 
 ## Reset
 
+Same as branch 03 — this branch never actually registers a new schema
+version (Schema Registry rejects it), so there's nothing extra to clean up:
 ```
 mvn exec:java -Dexec.mainClass=com.example.kafka.common.ResetDemoEnvironment
 ```
-Also deletes the `orders-demo-value` subject from Schema Registry (soft
-delete followed by a permanent delete), in addition to recreating
-`orders-demo` and `orders-demo-dlq`. The permanent delete matters: a
-soft-deleted subject still counts toward compatibility checks, so without
-it a fresh registration after reset could be rejected as "incompatible"
-with a schema that's supposedly gone.
