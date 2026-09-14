@@ -44,3 +44,8 @@ mvn exec:java -Dexec.mainClass=com.example.kafka.producer.OrderProducer
 
 You should see the consumer print each `OrderEvent` it receives, with
 `amount` as a plain number.
+
+Logging is configured via `src/main/resources/log4j2.xml` (Log4j2, bound
+through the SLF4J API). Kafka/Confluent client internals are set to `WARN`
+to keep the demo's own log lines visible; bump `com.example.kafka` to
+`DEBUG` there if you want more detail.

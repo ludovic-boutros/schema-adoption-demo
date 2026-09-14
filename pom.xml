@@ -16,6 +16,7 @@
     <confluent.version>8.3.1</confluent.version>
     <jackson.version>2.18.2</jackson.version>
     <slf4j.version>2.0.16</slf4j.version>
+    <log4j.version>2.26.1</log4j.version>
     <junit.version>5.11.3</junit.version>
     <mockito.version>5.14.2</mockito.version>
   </properties>
@@ -45,8 +46,20 @@
     </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-simple</artifactId>
+      <artifactId>slf4j-api</artifactId>
       <version>${slf4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-slf4j2-impl</artifactId>
+      <version>${log4j.version}</version>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-core</artifactId>
+      <version>${log4j.version}</version>
+      <scope>runtime</scope>
     </dependency>
 
     <dependency>
@@ -87,6 +100,13 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.5.2</version>
+        <configuration>
+          <!-- kafka-clients' test-jar bundles its own log4j2.yaml on the test classpath;
+               without this, Log4j2's classpath scan can find that one instead of ours. -->
+          <systemPropertyVariables>
+            <log4j2.configurationFile>${project.basedir}/src/main/resources/log4j2.xml</log4j2.configurationFile>
+          </systemPropertyVariables>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
