@@ -28,6 +28,13 @@
     </repository>
   </repositories>
 
+  <pluginRepositories>
+    <pluginRepository>
+      <id>confluent</id>
+      <url>https://packages.confluent.io/maven/</url>
+    </pluginRepository>
+  </pluginRepositories>
+
   <dependencies>
     <dependency>
       <groupId>org.apache.kafka</groupId>
@@ -127,6 +134,51 @@
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.4.1</version>
+      </plugin>
+      <plugin>
+        <!-- Loads SCHEMA_REGISTRY_URL/SR_API_KEY/SR_API_SECRET from the gitignored .properties
+             file into Maven properties, so the schema-registry-maven-plugin below can use them
+             for auth without any secret ever being written into this pom.xml. Silently does
+             nothing if .properties doesn't exist yet (quiet=true) - this plugin is only invoked
+             explicitly, never as part of `mvn package`/`mvn test`. -->
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>properties-maven-plugin</artifactId>
+        <version>1.2.1</version>
+        <executions>
+          <execution>
+            <id>load-local-properties</id>
+            <phase>initialize</phase>
+            <goals>
+              <goal>read-project-properties</goal>
+            </goals>
+            <configuration>
+              <files>
+                <file>${project.basedir}/.properties</file>
+              </files>
+              <quiet>true</quiet>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <!-- Checks order-event.schema.json for compatibility against whatever is currently
+             registered for orders-demo-value, without registering anything - run explicitly with:
+             mvn io.confluent:kafka-schema-registry-maven-plugin:test-compatibility -->
+        <groupId>io.confluent</groupId>
+        <artifactId>kafka-schema-registry-maven-plugin</artifactId>
+        <version>${confluent.version}</version>
+        <configuration>
+          <schemaRegistryUrls>
+            <param>${SCHEMA_REGISTRY_URL}</param>
+          </schemaRegistryUrls>
+          <userInfoConfig>${SR_API_KEY}:${SR_API_SECRET}</userInfoConfig>
+          <subjects>
+            <orders-demo-value>${project.basedir}/src/main/resources/schemas/order-event.schema.json</orders-demo-value>
+          </subjects>
+          <schemaTypes>
+            <orders-demo-value>JSON</orders-demo-value>
+          </schemaTypes>
+        </configuration>
       </plugin>
     </plugins>
   </build>
