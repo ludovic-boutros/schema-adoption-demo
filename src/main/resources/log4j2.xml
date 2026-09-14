@@ -7,10 +7,8 @@
   </Appenders>
 
   <Loggers>
-    <!-- Kafka clients and Confluent serializers are chatty at INFO; keep them at WARN so our
-         own producer/consumer log lines aren't buried during the demo. -->
-    <Logger name="org.apache.kafka" level="WARN"/>
-    <Logger name="io.confluent" level="WARN"/>
+    <Logger name="org.apache.kafka" level="INFO"/>
+    <Logger name="io.confluent" level="INFO"/>
 
     <Logger name="com.example.kafka" level="INFO"/>
 
