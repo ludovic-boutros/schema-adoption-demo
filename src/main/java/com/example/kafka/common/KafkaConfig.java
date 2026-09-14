@@ -114,4 +114,32 @@ public class KafkaConfig {
         admin.createTopics(missing).all().get(30, TimeUnit.SECONDS);
         missing.forEach(t -> log.info("Created topic '{}'", t.name()));
     }
+
+    /**
+     * Deletes any of the given topics that exist, so a demo run can start from a clean slate
+     * (no leftover messages, no offsets from a previous run). Does nothing for topics that don't
+     * exist. Deletion is asynchronous on the broker, so this waits for it to complete before
+     * returning.
+     */
+    public void deleteTopicsIfExist(String... topics) {
+        Properties adminProps = new Properties();
+        adminProps.putAll(baseProperties());
+        adminProps.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 10_000);
+        try (Admin admin = AdminClient.create(adminProps)) {
+            deleteTopicsIfExist(admin, Arrays.asList(topics));
+        } catch (Exception e) {
+            throw new RuntimeException("Could not delete topics: " + e.getMessage(), e);
+        }
+    }
+
+    /** Split out from {@link #deleteTopicsIfExist(String...)} so it's testable against a mock {@link Admin}. */
+    static void deleteTopicsIfExist(Admin admin, List<String> topics) throws Exception {
+        Set<String> existing = admin.listTopics().names().get(10, TimeUnit.SECONDS);
+        List<String> toDelete = topics.stream().filter(existing::contains).collect(Collectors.toList());
+        if (toDelete.isEmpty()) {
+            return;
+        }
+        admin.deleteTopics(toDelete).all().get(30, TimeUnit.SECONDS);
+        toDelete.forEach(t -> log.info("Deleted topic '{}'", t));
+    }
 }

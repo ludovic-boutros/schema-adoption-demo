@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class KafkaConfigTest {
@@ -61,5 +62,17 @@ class KafkaConfigTest {
         Set<String> topics = admin.listTopics().names().get(10, TimeUnit.SECONDS);
         assertTrue(topics.contains("orders-demo"));
         assertTrue(topics.contains("some-other-topic"));
+    }
+
+    @Test
+    void deleteTopicsIfExist_onlyDeletesTopicsThatExist() throws Exception {
+        Admin admin = new MockAdminClient.Builder().numBrokers(1).build();
+        admin.createTopics(List.of(new NewTopic("orders-demo", Optional.empty(), Optional.empty())))
+                .all().get(10, TimeUnit.SECONDS);
+
+        KafkaConfig.deleteTopicsIfExist(admin, List.of("orders-demo", "never-existed"));
+
+        Set<String> topics = admin.listTopics().names().get(10, TimeUnit.SECONDS);
+        assertFalse(topics.contains("orders-demo"));
     }
 }

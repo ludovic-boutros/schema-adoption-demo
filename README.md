@@ -50,3 +50,15 @@ through the SLF4J API). Kafka client and Confluent serializer internals log
 at `INFO`, same as the demo's own classes; bump either `org.apache.kafka`,
 `io.confluent`, or `com.example.kafka` to `DEBUG` there if you want more
 detail.
+
+## Reset
+
+To start this branch's demo from a clean slate (no leftover messages or
+offsets from a previous run):
+```
+mvn exec:java -Dexec.mainClass=com.example.kafka.common.ResetDemoEnvironment
+```
+This deletes the `orders-demo` topic if it exists and recreates it empty.
+It's never run automatically by the producer or consumer — only run it
+between demo runs, not while one is in progress, since it destroys whatever
+is currently in the topic.
