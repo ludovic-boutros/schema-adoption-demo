@@ -15,10 +15,11 @@ public class ResetDemoEnvironment {
 
     public static void main(String[] args) {
         KafkaConfig config = new KafkaConfig();
+        String dlqTopic = config.topic() + "-dlq";
 
-        log.info("Resetting demo environment for topic '{}'...", config.topic());
-        config.deleteTopicsIfExist(config.topic());
-        config.ensureTopicsExist(config.topic());
-        log.info("Done. '{}' is empty and ready.", config.topic());
+        log.info("Resetting demo environment for topics '{}' and '{}'...", config.topic(), dlqTopic);
+        config.deleteTopicsIfExist(config.topic(), dlqTopic);
+        config.ensureTopicsExist(config.topic(), dlqTopic);
+        log.info("Done. '{}' and '{}' are empty and ready.", config.topic(), dlqTopic);
     }
 }
