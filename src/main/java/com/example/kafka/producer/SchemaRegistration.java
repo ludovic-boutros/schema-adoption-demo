@@ -54,6 +54,21 @@ public final class SchemaRegistration {
     }
 
     /**
+     * Sets {@code subject}'s compatibility level explicitly, overriding Confluent Cloud's
+     * {@code BACKWARD} default for new subjects. This demo runs under {@code FORWARD}: the
+     * producer owns the schema and is free to evolve it, and existing consumers - built against
+     * an older version of the schema - must still be able to read whatever the producer sends
+     * next. {@code BACKWARD} would instead protect a consumer that just upgraded to a newer
+     * schema, which fits a team that owns the *reader* contract, not this demo's producer-owned
+     * one.
+     */
+    public static void setCompatibility(SchemaRegistryClient client, String subject, String compatibility)
+            throws IOException, RestClientException {
+        client.updateCompatibility(subject, compatibility);
+        log.info("Set compatibility for subject '{}' to {}", subject, compatibility);
+    }
+
+    /**
      * Deletes {@code subject} if it exists: a soft delete followed by a permanent one. The
      * permanent delete matters for a demo reset - a soft-deleted subject still counts toward
      * compatibility checks, so a fresh registration afterward could otherwise be rejected as

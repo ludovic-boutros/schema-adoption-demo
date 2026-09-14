@@ -49,6 +49,13 @@ class SchemaRegistrationTest {
     }
 
     @Test
+    void setCompatibility_updatesCompatibilityOnTheClient() throws Exception {
+        SchemaRegistration.setCompatibility(client, "orders-demo-value", "FORWARD");
+
+        verify(client).updateCompatibility("orders-demo-value", "FORWARD");
+    }
+
+    @Test
     void deleteSubjectIfExists_softAndHardDeletesWhenSubjectExists() throws Exception {
         when(client.getAllSubjects()).thenReturn(Set.of("orders-demo-value"));
 

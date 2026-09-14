@@ -31,6 +31,24 @@ git show --stat HEAD -- src/main/java/com/example/kafka/consumer
   record header (plus `schema-subject`), instead of the usual
   Confluent wire-format prefix. **The JSON payload bytes are unchanged.**
 
+## Why FORWARD, not BACKWARD
+
+Confluent Cloud defaults a new subject's compatibility to `BACKWARD` (a new
+schema must be able to read data written with the old one) — the right
+default for a team that owns the *reader* contract and wants to protect
+itself while it upgrades. Here, the producer owns the data: it's the one
+evolving the schema, and it's the existing consumers - built against
+whatever schema version came before - that need to keep working against
+what the producer sends next. That's `FORWARD` compatibility (old schema
+must be able to read data written with the new one), so `OrderProducer`
+calls `SchemaRegistration.setCompatibility(client, subject, "FORWARD")`
+before registering anything.
+
+This choice carries through every later branch: branch 04 shows a breaking
+change getting rejected under `FORWARD` too (a type change breaks reads in
+both directions), and branch 05 shows why safe, additive evolution actually
+depends on being in `FORWARD` mode for this particular schema.
+
 ## Why the consumer doesn't need to change
 
 The consumer's deserializer (`KafkaJsonDeserializer`) reads plain JSON bytes

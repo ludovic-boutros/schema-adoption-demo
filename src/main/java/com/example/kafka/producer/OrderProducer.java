@@ -18,6 +18,10 @@ import java.util.Properties;
  * schema behind that JSON is registered with Schema Registry, and the schema ID travels in a
  * Kafka record header via {@link HeaderEncodedJsonSerializer}. The consumer is completely
  * unmodified by this change: same payload bytes, headers it doesn't look at.
+ *
+ * <p>The subject's compatibility level is set to {@code FORWARD} before registering, since the
+ * producer owns this data: it evolves the schema, and existing consumers must remain able to
+ * read whatever it sends next.
  */
 public class OrderProducer {
 
@@ -30,6 +34,7 @@ public class OrderProducer {
 
         String subject = config.topic() + "-value";
         SchemaRegistryClient schemaRegistryClient = SchemaRegistration.buildClient(config);
+        SchemaRegistration.setCompatibility(schemaRegistryClient, subject, "FORWARD");
         int schemaId = SchemaRegistration.registerSchema(schemaRegistryClient, subject, SCHEMA_PATH);
         log.info("Registered schema for subject '{}' with id {}", subject, schemaId);
 
