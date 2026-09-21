@@ -11,8 +11,8 @@ things:
    being discovered downstream in production.
 
 It touches only the producer: `pom.xml`, `SchemaRegistration.java`,
-`HeaderEncodedJsonSerializer.java`, `order-event.schema.json`, and
-`OrderProducer.java`. The consumer is untouched — check for yourself:
+`order-event.schema.json`, and `OrderProducer.java`. The consumer is
+untouched — check for yourself:
 ```
 git show --stat HEAD -- src/main/java/com/example/kafka/consumer
 ```
@@ -26,10 +26,22 @@ git show --stat HEAD -- src/main/java/com/example/kafka/consumer
   **explicitly, at startup** (`SchemaRegistration.registerSchema(...)`) —
   never via serializer auto-registration. This is what CI/CD would do in a
   real system.
-- `HeaderEncodedJsonSerializer` wraps Confluent's plain `KafkaJsonSerializer`
-  and additionally writes the resulting schema ID into a `schema-id` Kafka
-  record header (plus `schema-subject`), instead of the usual
-  Confluent wire-format prefix. **The JSON payload bytes are unchanged.**
+- `OrderProducer.buildValueSerializer(...)` configures Confluent's real
+  `KafkaJsonSchemaSerializer` with
+  `value.schema.id.serializer=io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer`
+  — Confluent's documented ["schema GUID in header"](https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#wire-format-schema-guid-in-header)
+  wire format. Instead of the default magic-byte-plus-ID prefix on the
+  payload, the schema's GUID is written to the `__value_schema_id` record
+  header. **The JSON payload bytes are unchanged** — confirmed by reading a
+  live message's raw bytes: the payload is still exactly
+  `{"orderId":...,"customerId":...,"amount":...,"status":...}`, and the
+  header carries a single magic byte (`0x01`) followed by the 16-byte schema
+  GUID. `auto.register.schemas=false` + `use.latest.version=true` keep
+  registration an explicit, separate step (above) rather than something the
+  serializer does implicitly; `latest.compatibility.strict=false` skips a
+  sanity check that would otherwise compare the registered schema against
+  one reflected from `OrderEvent`'s fields — irrelevant here since the
+  registered schema file is the source of truth, not the POJO shape.
 
 ## Why FORWARD, not BACKWARD
 
@@ -52,10 +64,10 @@ depends on being in `FORWARD` mode for this particular schema.
 ## Why the consumer doesn't need to change
 
 The consumer's deserializer (`KafkaJsonDeserializer`) reads plain JSON bytes
-and has no idea headers exist. Since the payload format is byte-for-byte the
-same as branch 01's working baseline, the exact same consumer binary from
-branch 02 (with its poison-pill/DLQ handling intact) keeps working without
-modification, recompilation, or redeployment.
+and has no idea the `__value_schema_id` header exists. Since the payload
+format is byte-for-byte the same as branch 01's working baseline, the exact
+same consumer binary from branch 02 (with its poison-pill/DLQ handling
+intact) keeps working without modification, recompilation, or redeployment.
 
 ## Setup
 
