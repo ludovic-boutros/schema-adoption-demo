@@ -18,7 +18,7 @@ to see what happens.
 
 ## Prerequisites
 
-- Java 17+, Maven 3.9+
+- Java 21+, Maven 3.9+
 - A Confluent Cloud cluster and environment (Schema Registry is provisioned
   per-environment and is needed from branch 03 onward)
 - A Confluent Cloud API key (cluster) and, from branch 03 onward, a Schema
